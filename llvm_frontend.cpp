@@ -4,6 +4,7 @@
 #include <llvm/IR/ValueSymbolTable.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
+#include "llvm/LinkAllPasses.h"
 #include <string>
 
 #include "./llvm_frontend.hpp"
@@ -425,7 +426,7 @@ int main(int argc, char **argv) {
   frontend.compile();
 
   llvm::legacy::PassManager pm;
-
+  pm.add(llvm::createPromoteMemoryToRegisterPass());
   // generate bitcode
   std::error_code error_info;
   llvm::raw_fd_ostream raw_stream("out.ll", error_info,
