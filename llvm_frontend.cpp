@@ -305,7 +305,7 @@ llvm::Value *Frontend::condition() {
   if (cur_token.type == TokenType::Odd) {
     nextToken();
     auto *lhs = builder.CreateSRem(expression(), builder.getInt64(2));
-    return builder.CreateICmpEQ(lhs, builder.getInt64(0));
+    return builder.CreateICmpEQ(lhs, builder.getInt64(1));
   } else {
     auto *lhs = expression();
     llvm::CmpInst::Predicate inst = token_to_inst(cur_token.type);
