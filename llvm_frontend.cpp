@@ -5,6 +5,7 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 #include "llvm/LinkAllPasses.h"
+#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 #include <string>
 
 #include "./llvm_frontend.hpp"
@@ -427,6 +428,7 @@ int main(int argc, char **argv) {
 
   llvm::legacy::PassManager pm;
   pm.add(llvm::createPromoteMemoryToRegisterPass());
+  pm.add(llvm::createUnifyFunctionExitNodesPass());
   // generate bitcode
   std::error_code error_info;
   llvm::raw_fd_ostream raw_stream("out.ll", error_info,
