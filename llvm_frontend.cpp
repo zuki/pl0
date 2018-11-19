@@ -18,19 +18,7 @@ Frontend::Frontend(const std::string &path)
   cur_token = std::move(lexer.nextToken());
   peek_token = std::move(lexer.nextToken());
 
-  {
-    std::vector<llvm::Type *> param_types(1, builder.getInt64Ty());
-    auto *funcType =
-        llvm::FunctionType::get(builder.getInt64Ty(), param_types, false);
-    writeFunc = llvm::Function::Create(
-        funcType, llvm::Function::ExternalLinkage, "write", module);
-  }
-
-  {
-    auto *funcType = llvm::FunctionType::get(builder.getInt64Ty(), false);
-    writelnFunc = llvm::Function::Create(
-        funcType, llvm::Function::ExternalLinkage, "writeln", module);
-  }
+  setLibraries();
 }
 
 void Frontend::compile() {
@@ -438,4 +426,54 @@ int main(int argc, char **argv) {
   raw_stream.close();
 
   return 0;
+}
+
+void Frontend::setLibraries() {
+    // declare printf(*char, ...)
+  std::vector<llvm::Type *> Int8s(1, builder.getInt8PtrTy());
+  auto *printfFT =
+    llvm::FunctionType::get(builder.getInt32Ty(), Int8s, true);
+  auto *printfFunc = llvm::Function::Create(
+        printfFT, llvm::Function::ExternalLinkage, "printf", module);
+
+  // define void write(int i)
+  std::vector<llvm::Type *> Int32s(1, builder.getInt64Ty());
+  auto *writeFT =
+    llvm::FunctionType::get(builder.getVoidTy(), Int32s, false);
+  writeFunc = llvm::Function::Create(
+        writeFT, llvm::Function::ExternalLinkage, "write", module);
+
+  auto Arg = writeFunc->arg_begin();
+  Arg->setName("i");
+
+  auto *writeBB = llvm::BasicBlock::Create(context, "entry", writeFunc);
+  builder.SetInsertPoint(writeBB);
+
+  auto *writeStr = builder.CreateGlobalString("%d\n", ".str");
+
+  auto *alloca = builder.CreateAlloca(builder.getInt64Ty(), 0, "i.addr");
+  builder.CreateStore(Arg, alloca);
+  auto *param = builder.CreateLoad(alloca, "param");
+  auto* zero = builder.getInt32(0);
+  llvm::Value* args[] = {zero, zero};
+  auto *gep = builder.CreateInBoundsGEP(writeStr, args, "gep");
+  llvm::Value* write_args[] = { gep, param };
+  builder.CreateCall(printfFunc, write_args, "call_write");
+  builder.CreateRetVoid();
+
+  // define void writeln()
+  auto *writelnFT =
+    llvm::FunctionType::get(builder.getVoidTy(), false);
+  writelnFunc = llvm::Function::Create(
+        writelnFT, llvm::Function::ExternalLinkage, "writeln", module);
+
+  auto *writelnBB = llvm::BasicBlock::Create(context, "entry", writelnFunc);
+  builder.SetInsertPoint(writelnBB);
+
+  auto *writelnStr = builder.CreateGlobalString("\n", ".str");
+
+  gep = builder.CreateInBoundsGEP(writelnStr, args, "gep");
+  llvm::Value *writeln_args[] = { gep };
+  builder.CreateCall(printfFunc, writeln_args, "call_writeln");
+  builder.CreateRetVoid();
 }

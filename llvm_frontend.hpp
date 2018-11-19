@@ -48,6 +48,8 @@ private:
     nextToken();
   }
 
+  void setLibraries();
+
 private:
   llvm::LLVMContext context;
   llvm::Module *module;
