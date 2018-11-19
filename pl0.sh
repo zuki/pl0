@@ -1,6 +1,7 @@
-#!/bin/sh
-./build/llvmpl0 $1
-llvm-link out.ll -S -o linked.ll
-#llvm-link out.ll ./build/write.ll -S -o linked.ll
-#llvm-link out.ll ./build/write.ll -S -o ./build/linked.ll
-#opt -S -mem2reg ./build/linked.ll > out.ll
+#!/bin/bash
+in_file=$1
+obj_file=${1%.*}.o
+prg_file=${1%.*}
+
+./build/llvmpl0 ${in_file}
+clang++ ${obj_file} -o ${prg_file}

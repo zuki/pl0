@@ -3,7 +3,11 @@
 #include <llvm/IR/IRPrintingPasses.h>
 #include <llvm/IR/ValueSymbolTable.h>
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Target/TargetOptions.h>
 #include "llvm/LinkAllPasses.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 #include <string>
@@ -402,21 +406,57 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // std::fstream ifs(argv[1]);
-  // if (ifs.fail()) {
-  //   std::cerr << "cannot read " << argv[1] << std::endl;
-  //   return 1;
-  // }
-
-  // std::string code = std::string(std::istreambuf_iterator<char>(ifs),
-  // std::istreambuf_iterator<char>());
-
   pl0::Frontend frontend(argv[1]);
   frontend.compile();
 
-  llvm::legacy::PassManager pm;
+  llvm::InitializeAllTargetInfos();
+  llvm::InitializeAllTargets();
+  llvm::InitializeAllTargetMCs();
+  llvm::InitializeAllAsmParsers();
+  llvm::InitializeAllAsmPrinters();
+
+  auto module = frontend.getModule();
+
+  auto triple = llvm::sys::getDefaultTargetTriple();
+  module->setTargetTriple(triple);
+
+  std::string err;
+  auto target = llvm::TargetRegistry::lookupTarget(triple, err);
+  if (!target)
+    error(err.c_str());
+
+  auto cpu = "generic";
+  auto features = "";
+  llvm::TargetOptions option;
+  auto rm = llvm::Optional<llvm::Reloc::Model>();
+  auto machine = target->createTargetMachine(
+    triple, cpu, features, option, rm);
+
+  module->setDataLayout(machine->createDataLayout());
+
+  auto file_name = std::string(argv[1]);
+  int ext = file_name.find_last_of(".");
+  auto prog_name = (file_name.substr(0, ext) + ".o").c_str();
+  std::error_code err_code;
+  llvm::raw_fd_ostream dest(prog_name, err_code, llvm::sys::fs::F_None);
+  if (err_code)
+    error(("Could not open output file: " + err_code.message()).c_str());
+
+  llvm::legacy::PassManager pm = llvm::legacy::PassManager();
   pm.add(llvm::createPromoteMemoryToRegisterPass());
+  pm.add(llvm::createInstructionCombiningPass());
+  pm.add(llvm::createReassociatePass());
+  pm.add(llvm::createGVNPass());
   pm.add(llvm::createUnifyFunctionExitNodesPass());
+  pm.add(llvm::createCFGSimplificationPass());
+
+  auto file_type = llvm::TargetMachine::CGFT_ObjectFile;
+  if (machine->addPassesToEmitFile(pm, dest, nullptr, file_type))
+    error("TheTargetMachine can't emit a file of this type");
+  pm.run(*module);
+  dest.flush();
+
+/*
   // generate bitcode
   std::error_code error_info;
   llvm::raw_fd_ostream raw_stream("out.ll", error_info,
@@ -426,6 +466,7 @@ int main(int argc, char **argv) {
   raw_stream.close();
 
   return 0;
+*/
 }
 
 void Frontend::setLibraries() {
